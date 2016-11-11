@@ -22,7 +22,7 @@ namespace Api.Controllers
 
         static ValuesController()
         {
-            var connectionString = "UseDevelopmentStorage=true";
+            var connectionString = "DefaultEndpointsProtocol=https;AccountName=duelkings;AccountKey=jC3xf7IPO7sXZs334WeOQ7BVn7Ro+9GZObpvXTcXUafidAHqiA8blEr8H8jj5hPUcH1v4zb+mqbBnDZ7mwtdWw==";
 
             CloudStorageAccount cloudStorageAccount;
 
@@ -43,7 +43,7 @@ namespace Api.Controllers
         // GET api/values
         public string Get()
         {
-            return "Leandro em uma API do futuro " + (++contador);
+            return "Samuel Chamon" + (++contador);
         }
 
         // GET api/values/5

@@ -14,6 +14,7 @@ using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using Models;
 using Newtonsoft.Json;
+using Microsoft.Azure.NotificationHubs;
 
 namespace Processa_Pedidos
 {
@@ -23,10 +24,11 @@ namespace Processa_Pedidos
         private readonly ManualResetEvent runCompleteEvent = new ManualResetEvent(false);
 
         static CloudQueue cloudQueue;
+        private static NotificationHubClient _hub;
 
         public WorkerRole()
         {
-            var connectionString = "UseDevelopmentStorage=true";
+            var connectionString = "DefaultEndpointsProtocol=https;AccountName=duelkings;AccountKey=jC3xf7IPO7sXZs334WeOQ7BVn7Ro+9GZObpvXTcXUafidAHqiA8blEr8H8jj5hPUcH1v4zb+mqbBnDZ7mwtdWw==";
 
             CloudStorageAccount cloudStorageAccount;
 
@@ -42,6 +44,11 @@ namespace Processa_Pedidos
             //       A queue in Azure Storage is often considered a persistent item which exists over a long time.
             //       Every time .CreateIfNotExists() is executed a storage transaction and a bit of latency for the call occurs.
             cloudQueue.CreateIfNotExists();
+
+            string defaultFullSharedAccessSignature = "Endpoint=sb://duelkingshub.servicebus.windows.net/;SharedAccessKeyName=DefaultFullSharedAccessSignature;SharedAccessKey=91AiG8MBReRXiGLJzkS66vkYewqZutmYHECNWXI7b/c=";
+            string hubName = "pedidos";
+            _hub = NotificationHubClient.CreateClientFromConnectionString(defaultFullSharedAccessSignature, hubName);
+
         }
 
         public override void Run()
@@ -98,7 +105,7 @@ namespace Processa_Pedidos
             }
         }
 
-        public void GetMessageFromQueue()
+        public async void GetMessageFromQueue()
         {
             var cloudQueueMessage = cloudQueue.GetMessage();
 
@@ -116,11 +123,55 @@ namespace Processa_Pedidos
             } catch (Exception e) {
                 Trace.TraceInformation("It is not a Pedido object");
             }
-            
+
+            await SendNotificationAsync("gcm", "Boa noite!", "Samuel");
 
             cloudQueue.DeleteMessage(cloudQueueMessage);
         }
 
-      
+        public async Task<bool> SendNotificationAsync(string platform, string message, string to_tag)
+        {
+            var user = "Samuel";
+            string[] userTag = new string[1];
+            userTag[0] = to_tag;
+
+            NotificationOutcome outcome = null;
+
+            switch (platform.ToLower())
+            {
+                case "wns":
+                    // Windows 8.1 / Windows Phone 8.1
+                    var toast = @"<toast><visual><binding template=""ToastText01""><text id=""1"">" +
+                                "From " + user + ": " + message + "</text></binding></visual></toast>";
+                    outcome = await _hub.SendWindowsNativeNotificationAsync(toast, userTag);
+
+                    // Windows 10 specific Action Center support
+                    toast = @"<toast><visual><binding template=""ToastGeneric""><text id=""1"">" +
+                                "From " + user + ": " + message + "</text></binding></visual></toast>";
+                    outcome = await _hub.SendWindowsNativeNotificationAsync(toast, userTag);
+
+                    break;
+                case "apns":
+                    // iOS
+                    var alert = "{\"aps\":{\"alert\":\"" + "From " + user + ": " + message + "\"}}";
+                    outcome = await _hub.SendAppleNativeNotificationAsync(alert, userTag);
+                    break;
+                case "gcm":
+                    // Android
+                    var notif = "{ \"data\" : {\"message\":\"" + "From " + user + ": " + message + "\"}}";
+                    outcome = await _hub.SendGcmNativeNotificationAsync(notif, userTag);
+                    break;
+            }
+
+            if (outcome != null)
+            {
+                if (!((outcome.State == NotificationOutcomeState.Abandoned) ||
+                    (outcome.State == NotificationOutcomeState.Unknown)))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 }
